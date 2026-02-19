@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.budget.BudgetMapper">
+    
+    <resultMap id="BudgetResultMap" type="com.smartbudget.budget.BudgetDTO">
+        <id property="budgetId" column="budget_id"/>
+        <result property="yearMonth" column="year_month"/>
+        <result property="totalBudget" column="total_budget"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="userId" column="user_id"/>
+    </resultMap>
+    
+    <resultMap id="CategoryBudgetResultMap" type="com.smartbudget.budget.CategoryBudgetDTO">
+        <id property="catBudgetId" column="cat_budget_id"/>
+        <result property="yearMonth" column="year_month"/>
+        <result property="budgetAmount" column="budget_amount"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+    </resultMap>
+
+    <!-- 월별 총 예산 -->
+    <select id="selectBudgetByYearMonth" resultMap="BudgetResultMap">
+        SELECT budget_id, year_month, total_budget, created_at, updated_at, user_id
+        FROM projectdb.budgets
+        WHERE user_id = #{userId} AND year_month = #{yearMonth}
+    </select>
+    
+    <select id="selectBudgetsByUser" resultMap="BudgetResultMap">
+        SELECT budget_id, year_month, total_budget, created_at, updated_at, user_id
+        FROM projectdb.budgets
+        WHERE user_id = #{userId}
+        ORDER BY year_month DESC
+    </select>
+    
+    <insert id="insertBudget" parameterType="com.smartbudget.budget.BudgetDTO" useGeneratedKeys="true" keyProperty="budgetId">
+        INSERT INTO projectdb.budgets (year_month, total_budget, user_id)
+        VALUES (#{yearMonth}, #{totalBudget}, #{userId})
+    </insert>
+    
+    <update id="updateBudget" parameterType="com.smartbudget.budget.BudgetDTO">
+        UPDATE projectdb.budgets
+        SET total_budget = #{totalBudget},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE budget_id = #{budgetId}
+    </update>
+    
+    <delete id="deleteBudget">
+        DELETE FROM projectdb.budgets
+        WHERE budget_id = #{budgetId}
+    </delete>
+
+    <!-- 카테고리별 예산 -->
+    <select id="selectCategoryBudgetsByYearMonth" resultMap="CategoryBudgetResultMap">
+        SELECT cb.cat_budget_id, cb.year_month, cb.budget_amount, cb.created_at, 
+               cb.user_id, cb.category_id, c.name as category_name
+        FROM projectdb.category_budgets cb
+        LEFT JOIN projectdb.categories c ON cb.category_id = c.category_id
+        WHERE cb.user_id = #{userId} AND cb.year_month = #{yearMonth}
+        ORDER BY cb.budget_amount DESC
+    </select>
+    
+    <select id="selectCategoryBudget" resultMap="CategoryBudgetResultMap">
+        SELECT cb.cat_budget_id, cb.year_month, cb.budget_amount, cb.created_at, 
+               cb.user_id, cb.category_id, c.name as category_name
+        FROM projectdb.category_budgets cb
+        LEFT JOIN projectdb.categories c ON cb.category_id = c.category_id
+        WHERE cb.user_id = #{userId} AND cb.year_month = #{yearMonth} AND cb.category_id = #{categoryId}
+    </select>
+    
+    <insert id="insertCategoryBudget" parameterType="com.smartbudget.budget.CategoryBudgetDTO" useGeneratedKeys="true" keyProperty="catBudgetId">
+        INSERT INTO projectdb.category_budgets (year_month, budget_amount, user_id, category_id)
+        VALUES (#{yearMonth}, #{budgetAmount}, #{userId}, #{categoryId})
+    </insert>
+    
+    <update id="updateCategoryBudget" parameterType="com.smartbudget.budget.CategoryBudgetDTO">
+        UPDATE projectdb.category_budgets
+        SET budget_amount = #{budgetAmount}
+        WHERE cat_budget_id = #{catBudgetId}
+    </update>
+    
+    <delete id="deleteCategoryBudget">
+        DELETE FROM projectdb.category_budgets
+        WHERE cat_budget_id = #{catBudgetId}
+    </delete>
+</mapper>

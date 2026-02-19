@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.auth.UserMapper">
+    
+    <resultMap id="UserResultMap" type="com.smartbudget.auth.UserDTO">
+        <id property="userId" column="user_id"/>
+        <result property="email" column="email"/>
+        <result property="passwordHash" column="password_hash"/>
+        <result property="name" column="name"/>
+        <result property="phone" column="phone"/>
+        <result property="addr" column="addr"/>
+        <result property="birth" column="birth"/>
+        <result property="gender" column="gender"/>
+        <result property="photo" column="photo"/>
+        <result property="provider" column="provider"/>
+        <result property="providerId" column="provider_id"/>
+        <result property="role" column="role"/>
+    </resultMap>
+
+    <select id="selectUserById" resultMap="UserResultMap">
+        SELECT user_id, email, password_hash, created_at, name, photo
+        FROM projectdb.users
+        WHERE user_id = #{userId}
+    </select>
+    
+    <select id="selectUserByEmail" resultMap="UserResultMap">
+        SELECT user_id, email, password_hash, created_at
+        FROM projectdb.users
+        WHERE email = #{email}
+    </select>
+    
+    <select id="existsByEmail" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM projectdb.users WHERE email = #{email})
+    </select>
+    
+    <insert id="insertUser" parameterType="com.smartbudget.auth.UserDTO" useGeneratedKeys="true" keyProperty="userId">
+        INSERT INTO projectdb.users 
+        (email, password_hash, name, phone, addr, birth, gender, photo, provider, provider_id, role)
+        VALUES (#{email}, #{passwordHash}, #{name}, #{phone}, #{addr}, #{birth}, #{gender},
+        #{photo}, #{provider}, #{providerId}, #{role})
+    </insert>
+    
+    <update id="updateUser" parameterType="com.smartbudget.auth.UserDTO">
+        UPDATE projectdb.users
+        SET email = #{email},
+            password_hash = #{passwordHash}
+        WHERE user_id = #{userId}
+    </update>
+    
+    <delete id="deleteUser">
+        DELETE FROM projectdb.users
+        WHERE user_id = #{userId}
+    </delete>
+
+    <select id="selectUserByProviderAndProviderId" resultType="com.smartbudget.auth.UserDTO">
+        SELECT
+            user_id AS userId,
+            email,
+            password_hash AS passwordHash,
+            name,
+            phone,
+            addr,
+            birth,
+            gender,
+            photo,
+            provider,
+            provider_id AS providerId,
+            role
+        FROM projectDB.users
+        WHERE provider = #{provider} AND provider_id = #{providerId}
+    </select>
+
+
+    <update id="updateProfileByUserId" parameterType="com.smartbudget.auth.UserDTO">
+        UPDATE projectdb.users
+        SET
+            name = #{name},
+            phone = #{phone},
+            addr = #{addr},
+            birth = #{birth},
+            gender = #{gender},
+            photo = #{photo}
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="updateRequiredProfileByUserId" parameterType="com.smartbudget.auth.UserDTO">
+        UPDATE projectdb.users
+        SET
+            phone = #{phone},
+            addr  = #{addr},
+            birth = #{birth},
+            gender = #{gender}
+        WHERE user_id = #{userId}
+    </update>
+
+
+
+</mapper>

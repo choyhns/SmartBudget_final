@@ -1,0 +1,37 @@
+# API Server
+fastapi==0.128.0
+uvicorn==0.40.0
+python-multipart==0.0.21
+
+# Core Math & Image Processing
+# [IMPORTANT] Keep numpy<2.0. PaddleOCR and imgaug are NOT compatible with numpy 2.x yet.
+numpy==1.26.4
+opencv-python-headless==4.6.0.66
+pillow==12.1.0
+
+# PaddleOCR Framework
+paddleocr==2.7.0.3
+paddlepaddle==2.6.2
+
+# Dependencies for 'src/ppocr' (Source code execution)
+imgaug
+shapely
+pyclipper
+scikit-image
+
+# ONNX Runtime (Inference Acceleration)
+paddle2onnx>=1.0.6,<1.1
+onnxruntime>=1.14.0
+
+# Machine Learning Utilities
+scikit-learn==1.4.2
+joblib==1.4.2
+
+# New: Boosted Tree Models
+xgboost==2.0.3
+lightgbm==4.3.0
+
+# Optional: Visualization for Analysis
+matplotlib==3.8.4
+seaborn==0.13.2
+pandas==2.2.2

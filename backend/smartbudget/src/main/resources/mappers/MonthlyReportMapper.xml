@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.monthlyreport.MonthlyReportMapper">
+    
+    <resultMap id="MonthlyReportResultMap" type="com.smartbudget.monthlyreport.MonthlyReportDTO">
+        <id property="reportId" column="report_id"/>
+        <result property="yearMonth" column="year_month"/>
+        <result property="metricsJson" column="metrics_json"/>
+        <result property="llmSummaryText" column="llm_summary_text"/>
+        <result property="llmModel" column="llm_model"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="isCurrentMonth" column="is_current_month"/>
+    </resultMap>
+
+    <select id="selectReportsByUser" resultMap="MonthlyReportResultMap">
+        SELECT 
+            report_id,
+            year_month,
+            metrics_json::text as metrics_json,
+            llm_summary_text,
+            llm_model,
+            created_at,
+            user_id,
+            is_current_month
+        FROM projectdb.monthly_reports
+        WHERE user_id = #{userId}
+        ORDER BY year_month DESC
+    </select>
+
+    <select id="selectReportByYearMonth" resultMap="MonthlyReportResultMap">
+        SELECT 
+            report_id,
+            year_month,
+            metrics_json::text as metrics_json,
+            llm_summary_text,
+            llm_model,
+            created_at,
+            user_id,
+            is_current_month
+        FROM projectdb.monthly_reports
+        WHERE user_id = #{userId} AND year_month = #{yearMonth}
+    </select>
+
+    <select id="selectCurrentMonthReport" resultMap="MonthlyReportResultMap">
+        SELECT 
+            report_id,
+            year_month,
+            metrics_json::text as metrics_json,
+            llm_summary_text,
+            llm_model,
+            created_at,
+            user_id,
+            is_current_month
+        FROM projectdb.monthly_reports
+        WHERE user_id = #{userId} AND is_current_month = true
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insertMonthlyReport" parameterType="com.smartbudget.monthlyreport.MonthlyReportDTO" useGeneratedKeys="true" keyProperty="reportId">
+        INSERT INTO projectdb.monthly_reports (
+            year_month, 
+            metrics_json, 
+            llm_summary_text, 
+            llm_model, 
+            user_id, 
+            is_current_month
+        )
+        VALUES (
+            #{yearMonth}, 
+            #{metricsJson}::jsonb, 
+            #{llmSummaryText}, 
+            #{llmModel}, 
+            #{userId}, 
+            #{isCurrentMonth}
+        )
+    </insert>
+
+    <update id="updateMonthlyReport" parameterType="com.smartbudget.monthlyreport.MonthlyReportDTO">
+        UPDATE projectdb.monthly_reports
+        SET metrics_json = #{metricsJson}::jsonb,
+            llm_summary_text = #{llmSummaryText},
+            llm_model = #{llmModel},
+            is_current_month = #{isCurrentMonth}
+        WHERE report_id = #{reportId}
+    </update>
+
+    <update id="clearCurrentMonthFlag">
+        UPDATE projectdb.monthly_reports
+        SET is_current_month = false
+        WHERE user_id = #{userId} AND is_current_month = true
+    </update>
+
+    <delete id="deleteMonthlyReport">
+        DELETE FROM projectdb.monthly_reports
+        WHERE report_id = #{reportId}
+    </delete>
+</mapper>

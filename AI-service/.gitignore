@@ -1,0 +1,165 @@
+# ============================================================
+# SmartBudget AI-service .gitignore
+# Python + ML/OCR 프로젝트용
+# ============================================================
+
+# --- Python 가상환경 ---
+.venv/
+.venv310/
+venv/
+env/
+ENV/
+.venv.bak/
+venv.bak/
+
+# --- Python 캐시/컴파일 파일 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- 배포/빌드 파일 ---
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- 환경 변수 파일 ---
+# 루트 .env는 추적 (예시용), 실제 값은 .env.local 사용 권장
+# 하위 폴더의 .env는 제외
+ml-server/.env
+recommendation/.env
+OCR_receipts/.env
+
+.env.*.local
+*.env.local
+
+# --- IDE/에디터 설정 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# --- Jupyter Notebook 체크포인트 ---
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# --- ML 모델 파일 (용량이 크므로 제외, 필요시 .gitkeep 사용) ---
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.pth
+*.onnx
+*.pb
+*.tflite
+*.ckpt
+*.safetensors
+
+# OCR_receipts 모델 디렉토리 (일부는 .gitkeep으로 추적)
+OCR_receipts/model/
+OCR_receipts/models/*/model.joblib
+!OCR_receipts/models/*/meta.json
+
+# --- ML 서버 모델/아티팩트 ---
+ml-server/models/
+ml-server/artifacts/*.joblib
+ml-server/artifacts/*.pkl
+!ml-server/artifacts/.gitkeep
+
+# --- 로그 파일 ---
+*.log
+logs/
+*.log.*
+
+# --- 임시 파일 ---
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+
+# --- OS 파일 ---
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# --- PaddleOCR 캐시/모델 ---
+.paddlex/
+.paddleocr/
+*.pdiparams
+*.pdmodel
+*.pdopt
+
+# --- ChromaDB 벡터 DB ---
+chroma_db/
+*.chroma/
+.vectordb/
+
+# --- 테스트 커버리지 ---
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# --- mypy ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# --- pytype ---
+.pytype/
+
+# --- Cython ---
+cython_debug/
+
+# --- 패키지 관리자 ---
+pip-log.txt
+pip-delete-this-directory.txt
+
+# --- 프로젝트 특정 ---
+# 실행 스크립트는 포함 (run_all.py, run_with_py310.* 등)
+# 하지만 임시 실행 파일은 제외
+*.pyc
+*.pyo
+*.pyd
+
+# --- 데이터 파일 (용량이 큰 경우) ---
+*.csv
+*.json
+!**/schemas.json
+!**/meta.json
+data/
+datasets/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- 다운로드된 모델/데이터 ---
+downloads/
+models_downloaded/
+checkpoints/

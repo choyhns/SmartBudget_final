@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.paymentmethod.PaymentMethodMapper">
+    
+    <resultMap id="PaymentMethodResultMap" type="com.smartbudget.paymentmethod.PaymentMethodDTO">
+        <id property="methodId" column="method_id"/>
+        <result property="name" column="name"/>
+    </resultMap>
+
+    <select id="selectAllPaymentMethods" resultMap="PaymentMethodResultMap">
+        SELECT method_id, name
+        FROM projectdb.payment_methods
+        ORDER BY name
+    </select>
+    
+    <select id="selectPaymentMethodById" resultMap="PaymentMethodResultMap">
+        SELECT method_id, name
+        FROM projectdb.payment_methods
+        WHERE method_id = #{methodId}
+    </select>
+    
+    <insert id="insertPaymentMethod" parameterType="com.smartbudget.paymentmethod.PaymentMethodDTO" useGeneratedKeys="true" keyProperty="methodId">
+        INSERT INTO projectdb.payment_methods (name)
+        VALUES (#{name})
+    </insert>
+    
+    <update id="updatePaymentMethod" parameterType="com.smartbudget.paymentmethod.PaymentMethodDTO">
+        UPDATE projectdb.payment_methods
+        SET name = #{name}
+        WHERE method_id = #{methodId}
+    </update>
+    
+    <delete id="deletePaymentMethod">
+        DELETE FROM projectdb.payment_methods
+        WHERE method_id = #{methodId}
+    </delete>
+</mapper>

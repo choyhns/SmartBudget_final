@@ -1,0 +1,7 @@
+{
+    "name": "SmartBudget",
+    "description": "Premium AI-powered personal asset management web application for the modern generation.",
+    "requestFramePermissions": [
+      "camera"
+    ]
+  }

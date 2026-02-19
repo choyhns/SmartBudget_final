@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.savinggoal.SavingGoalMapper">
+    
+    <resultMap id="SavingGoalResultMap" type="com.smartbudget.savinggoal.SavingGoalDTO">
+        <id property="goalId" column="goal_id"/>
+        <result property="goalTitle" column="goal_title"/>
+        <result property="goalAmount" column="goal_amount"/>
+        <result property="startDate" column="start_date"/>
+        <result property="targetDate" column="target_date"/>
+        <result property="monthlyTarget" column="monthly_target"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="currentAmount" column="current_amount"/>
+    </resultMap>
+    
+    <resultMap id="GoalTransactionResultMap" type="com.smartbudget.savinggoal.GoalTransactionDTO">
+        <id property="goalTxId" column="goal_tx_id"/>
+        <result property="amount" column="amount"/>
+        <result property="goalId" column="goal_id"/>
+        <result property="txId" column="tx_id"/>
+        <result property="txDatetime" column="tx_datetime"/>
+        <result property="memo" column="memo"/>
+    </resultMap>
+
+    <!-- 저축 목표 목록 조회 (현재까지 저축한 금액 포함) -->
+    <select id="selectGoalsByUser" resultMap="SavingGoalResultMap">
+        SELECT 
+            sg.goal_id, sg.goal_title, sg.goal_amount, sg.start_date, sg.target_date, 
+            sg.monthly_target, sg.created_at, sg.user_id,
+            COALESCE(SUM(gt.amount), 0) as current_amount
+        FROM projectdb.saving_goals sg
+        LEFT JOIN projectdb.goal_transactions gt ON sg.goal_id = gt.goal_id
+        WHERE sg.user_id = #{userId}
+        GROUP BY sg.goal_id, sg.goal_title, sg.goal_amount, sg.start_date, sg.target_date, 
+                 sg.monthly_target, sg.created_at, sg.user_id
+        ORDER BY sg.created_at DESC
+    </select>
+    
+    <select id="selectGoalById" resultMap="SavingGoalResultMap">
+        SELECT 
+            sg.goal_id, sg.goal_title, sg.goal_amount, sg.start_date, sg.target_date, 
+            sg.monthly_target, sg.created_at, sg.user_id,
+            COALESCE(SUM(gt.amount), 0) as current_amount
+        FROM projectdb.saving_goals sg
+        LEFT JOIN projectdb.goal_transactions gt ON sg.goal_id = gt.goal_id
+        WHERE sg.goal_id = #{goalId}
+        GROUP BY sg.goal_id, sg.goal_title, sg.goal_amount, sg.start_date, sg.target_date, 
+                 sg.monthly_target, sg.created_at, sg.user_id
+    </select>
+    
+    <insert id="insertGoal" parameterType="com.smartbudget.savinggoal.SavingGoalDTO" useGeneratedKeys="true" keyProperty="goalId">
+        INSERT INTO projectdb.saving_goals (goal_title, goal_amount, start_date, target_date, monthly_target, user_id)
+        VALUES (#{goalTitle}, #{goalAmount}, #{startDate}, #{targetDate}, #{monthlyTarget}, #{userId})
+    </insert>
+    
+    <update id="updateGoal" parameterType="com.smartbudget.savinggoal.SavingGoalDTO">
+        UPDATE projectdb.saving_goals
+        SET goal_title = #{goalTitle},
+            goal_amount = #{goalAmount},
+            start_date = #{startDate},
+            target_date = #{targetDate},
+            monthly_target = #{monthlyTarget}
+        WHERE goal_id = #{goalId}
+    </update>
+    
+    <delete id="deleteGoal">
+        DELETE FROM projectdb.saving_goals
+        WHERE goal_id = #{goalId}
+    </delete>
+    
+    <!-- 목표별 총 저축액 조회 -->
+    <select id="selectTotalSavedAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM projectdb.goal_transactions
+        WHERE goal_id = #{goalId}
+    </select>
+    
+    <!-- 목표 거래 목록 조회 -->
+    <select id="selectGoalTransactions" resultMap="GoalTransactionResultMap">
+        SELECT gt.goal_tx_id, gt.amount, gt.goal_id, gt.tx_id,
+               t.tx_datetime, t.memo
+        FROM projectdb.goal_transactions gt
+        LEFT JOIN projectdb.transactions t ON gt.tx_id = t.tx_id
+        WHERE gt.goal_id = #{goalId}
+        ORDER BY t.tx_datetime DESC
+    </select>
+    
+    <insert id="insertGoalTransaction" parameterType="com.smartbudget.savinggoal.GoalTransactionDTO" useGeneratedKeys="true" keyProperty="goalTxId">
+        INSERT INTO projectdb.goal_transactions (amount, goal_id, tx_id)
+        VALUES (#{amount}, #{goalId}, #{txId})
+    </insert>
+    
+    <delete id="deleteGoalTransaction">
+        DELETE FROM projectdb.goal_transactions
+        WHERE goal_tx_id = #{goalTxId}
+    </delete>
+</mapper>

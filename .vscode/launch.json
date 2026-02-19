@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Spring Boot (smartbuget) with .env",
+      "request": "launch",
+      "mainClass": "com.smartbudget.SmartbudgetApplication",
+      "projectName": "smartbudget",
+      "envFile": "${workspaceFolder}/backend/smartbudget/.env"
+    }
+  ]
+}

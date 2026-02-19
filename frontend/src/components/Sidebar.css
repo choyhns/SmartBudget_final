@@ -1,0 +1,72 @@
+/* 사이드바 스타일 */
+.sidebar-card {
+  width: 16rem; /* 256px, w-64와 동일 */
+  min-height: 100%;
+  border-radius: 0;
+  background: rgb(27, 26, 26);
+  color: white;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+}
+
+/* 글로벌 button 스타일 초기화 (사이드바 내부만) */
+.sidebar-card button {
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.sidebar-card button:hover {
+  border-color: transparent;
+}
+.sidebar-card button:focus,
+.sidebar-card button:focus-visible {
+  outline: none;
+}
+
+.sidebar-card .sidebar-element {
+  color: rgb(148, 163, 184); /* slate-400 */
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  margin: 2px 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+}
+
+.sidebar-card .sidebar-element.active {
+  background-color: rgba(0, 77, 146, 0.35);
+  border-left-color: #004d92;
+  color: rgb(248, 250, 252);
+}
+
+.sidebar-card .sidebar-element:hover:not(.active) {
+  color: #3775bb;
+  background-color: rgba(55, 117, 187, 0.08);
+}
+
+/* 네비게이션 메뉴 간격 */
+.sidebar-card nav {
+  gap: 2px;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* 프리미엄 멤버십 섹션: 하단 여백 및 내부 여유 */
+.sidebar-card > div:last-of-type {
+  padding-top: 1rem;
+  padding-bottom: 1.25rem;
+}
+.sidebar-card > div:last-of-type > div {
+  padding: 1rem 1rem;
+  border-radius: 12px;
+}

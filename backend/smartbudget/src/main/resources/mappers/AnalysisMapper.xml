@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.analysis.AnalysisMapper">
+
+    <resultMap id="SpendingRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$SpendingRow">
+        <result property="totalIncome" column="total_income"/>
+        <result property="totalExpense" column="total_expense"/>
+        <result property="transactionCount" column="tx_count"/>
+    </resultMap>
+
+    <resultMap id="CategoryAmountRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$CategoryAmountRow">
+        <result property="categoryName" column="category_name"/>
+        <result property="amount" column="amount"/>
+    </resultMap>
+
+    <resultMap id="CategoryCompareRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$CategoryCompareRow">
+        <result property="categoryName" column="category_name"/>
+        <result property="currentAmount" column="current_amount"/>
+        <result property="previousAmount" column="previous_amount"/>
+        <result property="diffAmount" column="diff_amount"/>
+    </resultMap>
+
+    <resultMap id="WeekdayRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$WeekdayRow">
+        <result property="dayOfWeek" column="day_of_week"/>
+        <result property="amount" column="amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+
+    <resultMap id="WeekOfMonthRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$WeekOfMonthRow">
+        <result property="weekOfMonth" column="week_of_month"/>
+        <result property="amount" column="amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+
+    <resultMap id="MerchantRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$MerchantRow">
+        <result property="merchant" column="merchant"/>
+        <result property="amount" column="amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+
+    <resultMap id="BudgetActualRowMap" type="com.smartbudget.analysis.AnalysisResultDTO$BudgetActualRow">
+        <result property="categoryName" column="category_name"/>
+        <result property="budgetAmount" column="budget_amount"/>
+        <result property="actualAmount" column="actual_amount"/>
+        <result property="overAmount" column="over_amount"/>
+    </resultMap>
+
+    <!-- 1. 해당 월 총 수입/지출/건수 -->
+    <select id="selectSpendingByYearMonth" resultMap="SpendingRowMap">
+        SELECT
+            COALESCE(SUM(CASE WHEN t.amount &gt; 0 THEN t.amount ELSE 0 END), 0) AS total_income,
+            COALESCE(SUM(CASE WHEN t.amount &lt; 0 THEN ABS(t.amount) ELSE 0 END), 0) AS total_expense,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions t
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+    </select>
+
+    <!-- 2. 카테고리별 지출 상위 N -->
+    <select id="selectCategoryExpensesTop" resultMap="CategoryAmountRowMap">
+        SELECT
+            COALESCE(c.name, '미분류') AS category_name,
+            SUM(ABS(t.amount)) AS amount
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+          AND t.amount &lt; 0
+        GROUP BY c.name
+        ORDER BY amount DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 3. 카테고리별 이번달 vs 전달 비교 -->
+    <select id="selectCategoryCompareWithPrevious" resultMap="CategoryCompareRowMap">
+        WITH curr AS (
+            SELECT COALESCE(c.name, '미분류') AS category_name, SUM(ABS(t.amount)) AS amount
+            FROM projectdb.transactions t
+            LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+            WHERE t.user_id = #{userId} AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth} AND t.amount &lt; 0
+            GROUP BY c.name
+        ),
+        prev AS (
+            SELECT COALESCE(c.name, '미분류') AS category_name, SUM(ABS(t.amount)) AS amount
+            FROM projectdb.transactions t
+            LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+            WHERE t.user_id = #{userId} AND to_char(t.tx_datetime, 'YYYYMM') = #{previousYearMonth} AND t.amount &lt; 0
+            GROUP BY c.name
+        )
+        SELECT
+            COALESCE(curr.category_name, prev.category_name) AS category_name,
+            COALESCE(curr.amount, 0) AS current_amount,
+            COALESCE(prev.amount, 0) AS previous_amount,
+            COALESCE(curr.amount, 0) - COALESCE(prev.amount, 0) AS diff_amount
+        FROM curr
+        FULL OUTER JOIN prev ON curr.category_name = prev.category_name
+        ORDER BY current_amount DESC
+    </select>
+
+    <!-- 4. 요일별 지출 (1=일요일 ~ 7=토요일, EXTRACT DOW 0=일 ~ 6=토 → +1) -->
+    <select id="selectExpenseByWeekday" resultMap="WeekdayRowMap">
+        SELECT
+            (EXTRACT(DOW FROM t.tx_datetime)::int + 1) AS day_of_week,
+            SUM(ABS(t.amount)) AS amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions t
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+          AND t.amount &lt; 0
+        GROUP BY EXTRACT(DOW FROM t.tx_datetime)
+        ORDER BY day_of_week
+    </select>
+
+    <!-- 5. 주차별 지출 (1~5주차: 1-7일=1, 8-14=2, ...) -->
+    <select id="selectExpenseByWeekOfMonth" resultMap="WeekOfMonthRowMap">
+        SELECT
+            ((EXTRACT(DAY FROM t.tx_datetime)::int - 1) / 7 + 1) AS week_of_month,
+            SUM(ABS(t.amount)) AS amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions t
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+          AND t.amount &lt; 0
+        GROUP BY ((EXTRACT(DAY FROM t.tx_datetime)::int - 1) / 7 + 1)
+        ORDER BY week_of_month
+    </select>
+
+    <!-- 6. 가맹점별 지출 상위 N -->
+    <select id="selectTopMerchantsByExpense" resultMap="MerchantRowMap">
+        SELECT
+            COALESCE(NULLIF(TRIM(t.merchant), ''), '미입력') AS merchant,
+            SUM(ABS(t.amount)) AS amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions t
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+          AND t.amount &lt; 0
+        GROUP BY COALESCE(NULLIF(TRIM(t.merchant), ''), '미입력')
+        ORDER BY amount DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 7. 예산 대비 실제 (카테고리별 예산 있는 것만, 초과액 포함) -->
+    <select id="selectBudgetVsActual" resultMap="BudgetActualRowMap">
+        SELECT
+            c.name AS category_name,
+            cb.budget_amount AS budget_amount,
+            COALESCE(act.amount, 0) AS actual_amount,
+            GREATEST(COALESCE(act.amount, 0) - cb.budget_amount, 0) AS over_amount
+        FROM projectdb.category_budgets cb
+        JOIN projectdb.categories c ON cb.category_id = c.category_id
+        LEFT JOIN (
+            SELECT t.category_id, SUM(ABS(t.amount)) AS amount
+            FROM projectdb.transactions t
+            WHERE t.user_id = #{userId} AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth} AND t.amount &lt; 0
+            GROUP BY t.category_id
+        ) act ON cb.category_id = act.category_id
+        WHERE cb.user_id = #{userId} AND cb.year_month = #{yearMonth}
+        ORDER BY actual_amount DESC
+    </select>
+
+    <!-- 8. 특정 카테고리명(부분 일치) 해당 월 지출 합계. categoryName 있을 때만 호출 권장 -->
+    <select id="selectCategoryExpenseByName" resultMap="CategoryAmountRowMap">
+        SELECT
+            COALESCE(c.name, '미분류') AS category_name,
+            SUM(ABS(t.amount)) AS amount
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+          AND t.amount &lt; 0
+          <if test="categoryName != null and categoryName != ''">
+          AND c.name ILIKE '%' || #{categoryName} || '%'
+          </if>
+        GROUP BY c.name
+        ORDER BY amount DESC
+        LIMIT 1
+    </select>
+
+    <!-- 9. 전월 총 지출 (비교용) -->
+    <select id="selectSpendingByYearMonthPrevious" resultMap="SpendingRowMap">
+        SELECT
+            COALESCE(SUM(CASE WHEN t.amount &gt; 0 THEN t.amount ELSE 0 END), 0) AS total_income,
+            COALESCE(SUM(CASE WHEN t.amount &lt; 0 THEN ABS(t.amount) ELSE 0 END), 0) AS total_expense,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions t
+        WHERE t.user_id = #{userId}
+          AND to_char(t.tx_datetime, 'YYYYMM') = #{previousYearMonth}
+    </select>
+
+    <!-- ========== PR1: 9개 분석 템플릿 (날짜 범위: tx_datetime >= startDate AND tx_datetime < endDate) ========== -->
+    <!-- 인덱스 추천: CREATE INDEX idx_tx_user_datetime ON projectdb.transactions(user_id, tx_datetime); -->
+    <!-- 인덱스 추천: CREATE INDEX idx_tx_user_category ON projectdb.transactions(user_id, category_id) WHERE amount &lt; 0; -->
+
+    <resultMap id="MonthSummaryRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$MonthSummaryRow">
+        <result property="totalExpense" column="total_expense"/>
+        <result property="totalIncome" column="total_income"/>
+        <result property="txCount" column="tx_count"/>
+        <result property="aov" column="aov"/>
+    </resultMap>
+    <resultMap id="CategoryTopRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$CategoryTopRow">
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="totalAmount" column="total_amount"/>
+    </resultMap>
+    <resultMap id="PeriodTotalsRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$PeriodTotalsRow">
+        <result property="totalExpense" column="total_expense"/>
+        <result property="totalIncome" column="total_income"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+    <resultMap id="CategoryDeltaRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$CategoryDeltaRow">
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="currentAmount" column="current_amount"/>
+        <result property="baselineAmount" column="baseline_amount"/>
+        <result property="deltaAmount" column="delta_amount"/>
+    </resultMap>
+    <resultMap id="MerchantTopRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$MerchantTopRow">
+        <result property="merchant" column="merchant"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+    <resultMap id="TimebandRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$TimebandRow">
+        <result property="timeBand" column="time_band"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+    <resultMap id="DowRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$DowRow">
+        <result property="dow" column="dow"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+    <resultMap id="PeriodAovRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$PeriodAovRow">
+        <result property="txCount" column="tx_count"/>
+        <result property="aov" column="aov"/>
+        <result property="totalAmount" column="total_amount"/>
+    </resultMap>
+    <resultMap id="TimebandDeltaRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$TimebandDeltaRow">
+        <result property="timeBand" column="time_band"/>
+        <result property="currentAmount" column="current_amount"/>
+        <result property="baselineAmount" column="baseline_amount"/>
+        <result property="deltaAmount" column="delta_amount"/>
+    </resultMap>
+    <resultMap id="DowDeltaRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$DowDeltaRow">
+        <result property="dow" column="dow"/>
+        <result property="currentAmount" column="current_amount"/>
+        <result property="baselineAmount" column="baseline_amount"/>
+        <result property="deltaAmount" column="delta_amount"/>
+    </resultMap>
+    <resultMap id="KeywordStatsRowMap" type="com.smartbudget.analysis.AnalysisTemplateDTO$KeywordStatsRow">
+        <result property="keyword" column="keyword"/>
+        <result property="totalAmount" column="total_amount"/>
+        <result property="txCount" column="tx_count"/>
+    </resultMap>
+
+    <!-- 1) month_summary - 집계 -->
+    <select id="selectMonthSummaryTotals" resultMap="MonthSummaryRowMap">
+        SELECT
+            COALESCE(SUM(CASE WHEN amount &lt; 0 THEN ABS(amount) ELSE 0 END), 0) AS total_expense,
+            COALESCE(SUM(CASE WHEN amount &gt; 0 THEN amount ELSE 0 END), 0) AS total_income,
+            COUNT(*)::int AS tx_count,
+            COALESCE(AVG(ABS(amount)), 0) AS aov
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+    </select>
+
+    <!-- 1) month_summary - 카테고리 Top N (미분류 포함) -->
+    <select id="selectMonthSummaryCategoryTopN" resultMap="CategoryTopRowMap">
+        SELECT
+            t.category_id AS category_id,
+            COALESCE(c.name, '미분류') AS category_name,
+            SUM(ABS(t.amount)) AS total_amount
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        WHERE t.user_id = #{userId}
+          AND t.amount &lt; 0
+          AND t.tx_datetime &gt;= #{startDate}
+          AND t.tx_datetime &lt; #{endDate}
+        GROUP BY t.category_id, c.name
+        ORDER BY total_amount DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 2) month_compare - 기간 집계 1행 -->
+    <select id="selectPeriodTotals" resultMap="PeriodTotalsRowMap">
+        SELECT
+            COALESCE(SUM(CASE WHEN amount &lt; 0 THEN ABS(amount) ELSE 0 END), 0) AS total_expense,
+            COALESCE(SUM(CASE WHEN amount &gt; 0 THEN amount ELSE 0 END), 0) AS total_income,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+    </select>
+
+    <!-- 3) category_delta_topN (FULL JOIN + IS NOT DISTINCT FROM 미지원 → all_ids + LEFT JOIN으로 대체) -->
+    <select id="selectCategoryDeltaTopN" resultMap="CategoryDeltaRowMap">
+        WITH cur AS (
+            SELECT category_id, SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId}
+              AND amount &lt; 0
+              AND tx_datetime &gt;= #{curStart}
+              AND tx_datetime &lt; #{curEnd}
+            GROUP BY category_id
+        ),
+        prev AS (
+            SELECT category_id, SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId}
+              AND amount &lt; 0
+              AND tx_datetime &gt;= #{prevStart}
+              AND tx_datetime &lt; #{prevEnd}
+            GROUP BY category_id
+        ),
+        all_ids AS (
+            SELECT category_id FROM cur
+            UNION
+            SELECT category_id FROM prev
+        )
+        SELECT
+            all_ids.category_id AS category_id,
+            COALESCE(cat.name, '미분류') AS category_name,
+            COALESCE(cur.amt, 0) AS current_amount,
+            COALESCE(prev.amt, 0) AS baseline_amount,
+            (COALESCE(cur.amt, 0) - COALESCE(prev.amt, 0)) AS delta_amount
+        FROM all_ids
+        LEFT JOIN cur ON (cur.category_id IS NOT DISTINCT FROM all_ids.category_id)
+        LEFT JOIN prev ON (prev.category_id IS NOT DISTINCT FROM all_ids.category_id)
+        LEFT JOIN projectdb.categories cat ON cat.category_id = all_ids.category_id
+        ORDER BY ABS(COALESCE(cur.amt, 0) - COALESCE(prev.amt, 0)) DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 4) target_breakdown - 상위 가맹점 -->
+    <select id="selectTargetBreakdownMerchantTopN" resultMap="MerchantTopRowMap">
+        SELECT
+            COALESCE(NULLIF(TRIM(merchant), ''), '미입력') AS merchant,
+            SUM(ABS(amount)) AS total_amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+          <if test="categoryId != null">
+          AND category_id = #{categoryId}
+          </if>
+        GROUP BY COALESCE(NULLIF(TRIM(merchant), ''), '미입력')
+        ORDER BY total_amount DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 4) target_breakdown - 시간대 분포 (야식 등) -->
+    <select id="selectTargetBreakdownTimeband" resultMap="TimebandRowMap">
+        SELECT
+            CASE
+                WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 21 AND 23
+                  OR EXTRACT(HOUR FROM tx_datetime) BETWEEN 0 AND 2 THEN 'LATE_NIGHT'
+                WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 6 AND 10 THEN 'MORNING'
+                WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 11 AND 14 THEN 'LUNCH'
+                WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 17 AND 20 THEN 'DINNER'
+                ELSE 'OTHER'
+            END AS time_band,
+            SUM(ABS(amount)) AS total_amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+          <if test="categoryId != null">
+          AND category_id = #{categoryId}
+          </if>
+        GROUP BY time_band
+        ORDER BY total_amount DESC
+    </select>
+
+    <!-- 4) target_breakdown - 요일별 분포 -->
+    <select id="selectTargetBreakdownDow" resultMap="DowRowMap">
+        SELECT
+            EXTRACT(DOW FROM tx_datetime)::int AS dow,
+            SUM(ABS(amount)) AS total_amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+          <if test="categoryId != null">
+          AND category_id = #{categoryId}
+          </if>
+        GROUP BY EXTRACT(DOW FROM tx_datetime)
+        ORDER BY dow
+    </select>
+
+    <!-- 5) aov_vs_count_decompose - 한 기간 1행 -->
+    <select id="selectPeriodAov" resultMap="PeriodAovRowMap">
+        SELECT
+            COUNT(*)::int AS tx_count,
+            COALESCE(AVG(ABS(amount)), 0) AS aov,
+            COALESCE(SUM(ABS(amount)), 0) AS total_amount
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+    </select>
+
+    <!-- 6) timeband_delta -->
+    <select id="selectTimebandDelta" resultMap="TimebandDeltaRowMap">
+        WITH cur AS (
+            SELECT
+                CASE WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 21 AND 23 OR EXTRACT(HOUR FROM tx_datetime) BETWEEN 0 AND 2 THEN 'LATE_NIGHT'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 6 AND 10 THEN 'MORNING'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 11 AND 14 THEN 'LUNCH'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 17 AND 20 THEN 'DINNER'
+                     ELSE 'OTHER' END AS band,
+                SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId} AND amount &lt; 0
+              AND tx_datetime &gt;= #{curStart} AND tx_datetime &lt; #{curEnd}
+              <if test="categoryId != null">
+              AND category_id = #{categoryId}
+              </if>
+            GROUP BY band
+        ),
+        prev AS (
+            SELECT
+                CASE WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 21 AND 23 OR EXTRACT(HOUR FROM tx_datetime) BETWEEN 0 AND 2 THEN 'LATE_NIGHT'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 6 AND 10 THEN 'MORNING'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 11 AND 14 THEN 'LUNCH'
+                     WHEN EXTRACT(HOUR FROM tx_datetime) BETWEEN 17 AND 20 THEN 'DINNER'
+                     ELSE 'OTHER' END AS band,
+                SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId} AND amount &lt; 0
+              AND tx_datetime &gt;= #{prevStart} AND tx_datetime &lt; #{prevEnd}
+              <if test="categoryId != null">
+              AND category_id = #{categoryId}
+              </if>
+            GROUP BY band
+        )
+        SELECT
+            COALESCE(cur.band, prev.band) AS time_band,
+            COALESCE(cur.amt, 0) AS current_amount,
+            COALESCE(prev.amt, 0) AS baseline_amount,
+            (COALESCE(cur.amt, 0) - COALESCE(prev.amt, 0)) AS delta_amount
+        FROM cur
+        FULL OUTER JOIN prev ON cur.band = prev.band
+        ORDER BY current_amount DESC
+    </select>
+
+    <!-- 7) dow_delta -->
+    <select id="selectDowDelta" resultMap="DowDeltaRowMap">
+        WITH cur AS (
+            SELECT EXTRACT(DOW FROM tx_datetime)::int AS dow, SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId} AND amount &lt; 0
+              AND tx_datetime &gt;= #{curStart} AND tx_datetime &lt; #{curEnd}
+              <if test="categoryId != null">
+              AND category_id = #{categoryId}
+              </if>
+            GROUP BY EXTRACT(DOW FROM tx_datetime)
+        ),
+        prev AS (
+            SELECT EXTRACT(DOW FROM tx_datetime)::int AS dow, SUM(ABS(amount)) AS amt
+            FROM projectdb.transactions
+            WHERE user_id = #{userId} AND amount &lt; 0
+              AND tx_datetime &gt;= #{prevStart} AND tx_datetime &lt; #{prevEnd}
+              <if test="categoryId != null">
+              AND category_id = #{categoryId}
+              </if>
+            GROUP BY EXTRACT(DOW FROM tx_datetime)
+        )
+        SELECT
+            COALESCE(cur.dow, prev.dow)::int AS dow,
+            COALESCE(cur.amt, 0) AS current_amount,
+            COALESCE(prev.amt, 0) AS baseline_amount,
+            (COALESCE(cur.amt, 0) - COALESCE(prev.amt, 0)) AS delta_amount
+        FROM cur
+        FULL OUTER JOIN prev ON cur.dow = prev.dow
+        ORDER BY dow
+    </select>
+
+    <!-- 8) top_merchants -->
+    <select id="selectTopMerchants" resultMap="MerchantTopRowMap">
+        SELECT
+            COALESCE(NULLIF(TRIM(merchant), ''), '미입력') AS merchant,
+            SUM(ABS(amount)) AS total_amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+          <if test="categoryId != null">
+          AND category_id = #{categoryId}
+          </if>
+        GROUP BY COALESCE(NULLIF(TRIM(merchant), ''), '미입력')
+        ORDER BY total_amount DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 9) keyword_stats (키워드 1개당 호출, 키워드 없으면 빈 결과) -->
+    <select id="selectKeywordStats" resultMap="KeywordStatsRowMap">
+        SELECT
+            #{keyword} AS keyword,
+            COALESCE(SUM(ABS(amount)), 0) AS total_amount,
+            COUNT(*)::int AS tx_count
+        FROM projectdb.transactions
+        WHERE user_id = #{userId}
+          AND amount &lt; 0
+          AND tx_datetime &gt;= #{startDate}
+          AND tx_datetime &lt; #{endDate}
+          <if test="categoryId != null">
+          AND category_id = #{categoryId}
+          </if>
+          AND ( merchant ILIKE '%' || #{keyword} || '%' OR memo ILIKE '%' || #{keyword} || '%' )
+    </select>
+</mapper>

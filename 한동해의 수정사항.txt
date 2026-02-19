@@ -1,0 +1,172 @@
+========================================
+한동해의 수정사항 (AWS S3 영수증 + OCR + 레이아웃)
+========================================
+문서 업데이트: 2026-02-10 (최신순)
+
+----------------------------------------
+[최신] 1. AI 서비스 통합 및 포트 구조 변경
+----------------------------------------
+수정날짜: 2026-02-10
+
+■ 문제 / 배경
+  · ml-server(8000)와 OCR_receipts(8001)를 별도 프로세스로 띄우면서 8001 포트 프로세스가 자주 죽고 백엔드에서 ConnectException이 반복 발생.
+  · Spring Boot devtools + uvicorn reload + PaddleOCR 초기 로딩이 겹쳐 프로세스 생명주기 관리가 불안정해짐.
+
+■ 주요 수정
+  · ml-server FastAPI에 OCR_receipts FastAPI 앱을 `/receipts` 경로로 mount하여 단일 프로세스/포트(8000) 구조로 통합.
+  · `application.properties`의 `ocr.receipts.server.url` 기본값을 `http://127.0.0.1:8000/receipts`로 변경하고 Recommendation URL도 IPv4(127.0.0.1)로 고정.
+  · `run_all.py`에서 더 이상 8001 프로세스를 띄우지 않고, 8000 `/health`와 `/receipts/health`만 헬스 체크하도록 조정.
+
+■ 효과
+  · 8001 포트 죽음으로 인한 ConnectException 제거, 영수증 OCR+분류 파이프라인을 8000 하나로 안정적으로 제공.
+  · 프로세스 수가 줄어 장애 원인 추적·로그 수집·헬스 체크 구조가 단순해지고, 팀원 간 환경 재현이 쉬워짐.
+
+----------------------------------------
+1. 영수증 저장 시 user_id가 1로 들어가던 문제
+----------------------------------------
+수정날짜: 2026-02-03
+
+■ 원인
+  · JWT principal이 null이거나 파싱 실패 시 actualUserId 기본값 1L 사용
+  · 프론트에서 userId를 보내지 않고 JWT만 의존
+
+■ TransactionForm.tsx
+  · 어디: 영수증 포함 저장 시 FormData 구성 부분
+  · 어떻게: authService import 추가, formData에 userId 추가
+    - const uid = authService.getUserId();
+    - if (uid != null) formData.append('userId', String(uid));
+
+■ ReceiptController.java (saveReceiptAndCreateTransaction)
+  · 어디: actualUserId 결정 로직
+  · 어떻게: 요청 파라미터 userId 우선, 없으면 JWT principal, 없으면 1L
+    - Long actualUserId = userId != null ? userId : (principal != null ? principal.getUserId() : 1L);
+
+----------------------------------------
+2. 영수증 저장 시 ocr_raw_json, ocr_parsed_json이 null이던 문제
+----------------------------------------
+수정날짜: 2026-02-03
+
+■ 원인
+  · saveReceiptAndCreateTransaction에서 S3 업로드·receipt insert·거래 생성만 하고 OCR 미실행
+
+■ ReceiptService.java (saveReceiptAndCreateTransaction)
+  · 어디: insertReceipt 직후
+  · 어떻게: runOcr(imageData, mimeType, filename) 호출 후, OCR 성공 시
+    - receipt.setOcrRawJson(ocrRawJson), setOcrParsedJson(ocrParsedJson), setStatus("CONFIRMED")
+    - receiptMapper.updateReceipt(receipt)
+  · OCR 실패 시에도 거래는 그대로 생성 (사용자 입력값으로 저장)
+
+----------------------------------------
+3. OCR_receipts - NumPy 2 / imgaug np.sctypes 오류
+----------------------------------------
+수정날짜: 2026-02-03
+
+■ 오류 메시지
+  · AttributeError: `np.sctypes` was removed in the NumPy 2.0 release (imgaug에서 사용)
+
+■ OCR_receipts/requirement.txt
+  · 어떻게: numpy 2 대신 numpy 1.x 고정
+    - numpy==1.26.4
+    - opencv-python-headless==4.6.0.66 (numpy 1.x 호환)
+  · paddleocr / imgaug는 NumPy 2 미지원
+
+■ OCR_receipts/README.md
+  · 1-2) 오류 시: np.sctypes 오류 시 requirement.txt 기준 numpy 1.26.4 사용 후 pip install -r requirement.txt 재설치 안내
+
+----------------------------------------
+4. OCR_receipts - OpenCV / NumPy ABI 충돌 (cv2 import 실패)
+----------------------------------------
+수정날짜: 2026-02-03
+
+■ 오류 메시지
+  · RuntimeError: module compiled against ABI version 0x1000009 but this version of numpy is 0x2000000
+  · ImportError: numpy.core.multiarray failed to import
+
+■ 원인
+  · paddleocr이 opencv-python 4.6, opencv-contrib-python 4.6(numpy 1.x용)을 끌어옴
+  · numpy 2와 opencv 4.6 ABI 불일치 → cv2 로드 시 충돌
+
+■ OCR_receipts/requirement.txt
+  · opencv-python-headless 명시, numpy 1.x 또는 2.x에 맞춰 버전 정리
+
+■ fix_opencv.ps1 (신규)
+  · 내용: pip uninstall opencv-python opencv-contrib-python -y
+  · 용도: uvicorn 종료 후 실행해 opencv-python-headless만 남기기
+
+■ OCR_receipts/README.md
+  · 1-2) cv2 ABI 오류 시: uvicorn 종료 후 pip uninstall opencv-python opencv-contrib-python -y 또는 .\fix_opencv.ps1 안내
+
+----------------------------------------
+5. OCR_receipts - requirement.txt opencv 버전 오타 및 인코딩
+----------------------------------------
+수정날짜: 2026-02-03
+
+■ requirement.txt
+  · opencv 버전: 4.1.13.0.90(오타) → 4.13.0.90 (PyPI에는 4.13.0.90만 존재)
+  · 파일을 UTF-8로 정리 (기존 UTF-16 BOM/공백 문제 제거)
+
+----------------------------------------
+6. 백엔드 - OCR 전용 API 및 거래 저장 시 S3+receipt+거래 한 번에
+----------------------------------------
+수정날짜: 2026-02-02 이후
+
+■ ReceiptService
+  · processOcrOnly(MultipartFile): OCR만 수행, S3/DB 저장 없음 (미리보기·폼 자동 입력용)
+  · saveReceiptAndCreateTransaction(userId, file, transaction): S3 업로드 → receipt insert → (OCR 실행 및 ocr_raw_json/ocr_parsed_json 저장) → 거래 생성
+
+■ ReceiptController
+  · POST /api/receipts/ocr-only: processOcrOnly 호출
+  · POST /api/receipts/save-and-create-transaction: file + date, amount, merchant, type, categoryId, userId 등 @RequestParam, saveReceiptAndCreateTransaction 호출
+
+■ 프론트 TransactionForm
+  · 업로드 시: POST /api/receipts/ocr-only 호출, pendingReceiptFile·previewObjectUrl 상태로 보관, OCR 결과로 폼 필드 채움
+  · 거래 저장 시: pendingReceiptFile 있으면 FormData(file + 거래 필드 + userId)로 POST /api/receipts/save-and-create-transaction, 응답 거래를 onSaveCreatedTransaction으로 목록 반영
+
+----------------------------------------
+7. 백엔드 - 설정/의존성 (AWS S3)
+----------------------------------------
+수정날짜: 2026-02-02
+
+■ build.gradle
+  · implementation 'software.amazon.awssdk:s3:2.25.0' (또는 호환 버전) 추가
+
+■ application.properties
+  · aws.s3.enabled, aws.s3.bucket, aws.region (.env 참조)
+
+■ .env / .env.example
+  · AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET, AWS_S3_ENABLED
+
+----------------------------------------
+8. 백엔드 - S3Service, ReceiptService S3 연동
+----------------------------------------
+수정날짜: 2026-02-02
+
+■ S3Service (신규)
+  · upload(String objectKey, byte[] bytes, String contentType), getPresignedUrl(String objectKey, int expirationMinutes)
+  · @ConditionalOnProperty("aws.s3.enabled", havingValue = "true")
+
+■ ReceiptService
+  · saveFile(userId, file): S3 사용 시 S3 업로드 후 objectKey 반환
+  · getPresignedUrlForReceipt(fileId, userId): Presigned URL 반환
+
+■ ReceiptController
+  · GET /api/receipts/{fileId}/presigned-url: Presigned URL 응답
+
+----------------------------------------
+9. 프론트엔드 - TransactionForm 레이아웃 및 Presigned URL
+----------------------------------------
+수정날짜: 2026-02-02
+
+■ TransactionForm
+  · 상태: receiptImageUrl(Presigned URL), pendingReceiptFile, previewObjectUrl 등
+  · useEffect(receiptFileId): Presigned URL 요청 후 receiptImageUrl 설정
+  · 레이아웃: 영수증 이미지 있을 때 좌(이미지) / 우(폼), max-w-5xl 등
+
+========================================
+요약 (최신순)
+========================================
+· user_id 1 문제: 프론트에서 userId FormData 전달, 백엔드에서 요청 파라미터 userId 우선 사용
+· ocr_raw_json/ocr_parsed_json: saveReceiptAndCreateTransaction에서 runOcr() 후 updateReceipt
+· OCR_receipts: numpy 1.26.4, opencv-headless 4.6, fix_opencv.ps1, README 오류 시 안내
+· OCR 전용 API(ocr-only), save-and-create-transaction 플로우, FormData+userId 전송
+· S3Service, ReceiptService S3 연동, Presigned URL, TransactionForm 레이아웃

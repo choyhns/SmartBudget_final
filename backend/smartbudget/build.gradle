@@ -1,0 +1,106 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.9'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com'
+version = '0.0.1-SNAPSHOT'
+description = 'Demo project for Spring Boot'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+ext {
+    set('jjwtVersion', '0.13.0')
+}
+
+dependencies {
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webflux' // WebClient for Gemini API
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+	// Security / OAuth2 / JWT Resource Server
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+  implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+  implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+	// JWT (발급/서명 등은 이후 단계에서 사용)
+	implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+  runtimeOnly   "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+  runtimeOnly   "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+
+	// MyBatis + PostgreSQL
+	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.5'
+	runtimeOnly 'org.postgresql:postgresql'
+
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	testCompileOnly 'org.projectlombok:lombok'
+  testAnnotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	
+	// 테스트용 H2 인메모리 데이터베이스
+	testRuntimeOnly 'com.h2database:h2'
+
+	// AWS S3 (영수증 이미지 저장)
+	implementation platform('software.amazon.awssdk:bom:2.25.0')
+	implementation 'software.amazon.awssdk:s3'
+
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// 테스트 실행 시 메모리 설정 (시스템 메모리 부족 시 낮춘 설정)
+	maxHeapSize = "256m"
+	jvmArgs = ['-Xmx256m', '-Xms128m', '-XX:MaxMetaspaceSize=128m']
+	// 메모리 부족 시 테스트를 건너뛰려면: test.enabled = false
+}
+
+// .env를 bootRun 환경변수로 주입
+tasks.named("bootRun") {
+    doFirst {
+        def envFile = file(".env")
+        if (!envFile.exists()) {
+            println " .env not found: ${envFile.absolutePath}"
+            return
+        }
+
+        envFile.readLines("UTF-8").each { line ->
+            def s = line.trim()
+            if (!s || s.startsWith("#")) return
+
+            def idx = s.indexOf("=")
+            if (idx <= 0) return
+
+            def key = s.substring(0, idx).trim()
+            def value = s.substring(idx + 1).trim()
+
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.substring(1, value.length() - 1)
+            }
+
+            environment key, value
+        }
+    }
+}

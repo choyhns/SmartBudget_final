@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.recommendation.RecommendationMapper">
+    
+    <resultMap id="CardResultMap" type="com.smartbudget.recommendation.CardDTO">
+        <id property="cardId" column="card_id"/>
+        <result property="name" column="name"/>
+        <result property="company" column="company"/>
+        <result property="benefitsJson" column="benefits_json"/>
+        <result property="benefitsDetailText" column="benefits_detail_text"/>
+        <result property="monthlyRequirement" column="monthly_requirement"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="link" column="link"/>
+        <result property="tags" column="tags" typeHandler="com.smartbudget.config.StringArrayTypeHandler"/>
+    </resultMap>
+    
+    <resultMap id="ProductResultMap" type="com.smartbudget.recommendation.ProductDTO">
+        <id property="productId" column="product_id"/>
+        <result property="type" column="type"/>
+        <result property="name" column="name"/>
+        <result property="bank" column="bank"/>
+        <result property="rate" column="rate"/>
+        <result property="conditionsJson" column="conditions_json"/>
+        <result property="tags" column="tags" typeHandler="com.smartbudget.config.StringArrayTypeHandler"/>
+    </resultMap>
+    
+    <resultMap id="RecommendationResultMap" type="com.smartbudget.recommendation.RecommendationDTO">
+        <id property="recId" column="rec_id"/>
+        <result property="yearMonth" column="year_month"/>
+        <result property="recType" column="rec_type"/>
+        <result property="itemId" column="item_id"/>
+        <result property="score" column="score"/>
+        <result property="reasonText" column="reason_text"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="itemName" column="item_name"/>
+        <result property="itemDetails" column="item_details"/>
+    </resultMap>
+
+    <!-- cards 테이블: image_url, link 컬럼 있음 (없으면 ALTER TABLE projectdb.cards ADD COLUMN IF NOT EXISTS link TEXT;) -->
+    <select id="selectAllCards" resultMap="CardResultMap">
+        SELECT 
+            card_id, 
+            name, 
+            company, 
+            benefits_json::text as benefits_json, 
+            benefits_detail_text, 
+            monthly_requirement,
+            image_url, 
+            link, 
+            tags
+        FROM projectdb.cards
+        ORDER BY name
+    </select>
+    
+    <select id="selectCardById" resultMap="CardResultMap">
+        SELECT 
+            card_id, 
+            name, 
+            company, 
+            benefits_json::text as benefits_json, 
+            benefits_detail_text,
+            monthly_requirement,
+            image_url, 
+            link, 
+            tags
+        FROM projectdb.cards
+        WHERE card_id = #{cardId}
+    </select>
+    
+    <insert id="insertCard" parameterType="com.smartbudget.recommendation.CardDTO" useGeneratedKeys="true" keyProperty="cardId">
+        INSERT INTO projectdb.cards (name, company, benefits_json, benefits_detail_text, monthly_requirement, image_url, link, tags)
+        VALUES (#{name}, #{company}, #{benefitsJson}::jsonb, #{benefitsDetailText}, #{monthlyRequirement}, #{imageUrl}, #{link}, #{tags, typeHandler=com.smartbudget.config.StringArrayTypeHandler})
+    </insert>
+    
+    <update id="updateCardImage">
+        UPDATE projectdb.cards SET image_url = #{imageUrl} WHERE card_id = #{cardId}
+    </update>
+    
+    <update id="updateCardLink">
+        UPDATE projectdb.cards SET link = #{link}
+        WHERE name = #{name} AND company = #{company}
+    </update>
+    
+    <update id="updateCardLinkById">
+        UPDATE projectdb.cards SET link = #{link}
+        WHERE card_id = #{cardId}
+    </update>
+    
+    <!-- 금융상품 -->
+    <select id="selectAllProducts" resultMap="ProductResultMap">
+        SELECT product_id, type, name, bank, rate, conditions_json::text as conditions_json, tags
+        FROM projectdb.products
+        ORDER BY type, name
+    </select>
+    
+    <select id="selectProductsByType" resultMap="ProductResultMap">
+        SELECT product_id, type, name, bank, rate, conditions_json::text as conditions_json, tags
+        FROM projectdb.products
+        WHERE type = #{type}
+        ORDER BY rate DESC
+    </select>
+    
+    <select id="selectProductById" resultMap="ProductResultMap">
+        SELECT product_id, type, name, bank, rate, conditions_json::text as conditions_json, tags
+        FROM projectdb.products
+        WHERE product_id = #{productId}
+    </select>
+    
+    <insert id="insertProduct" parameterType="com.smartbudget.recommendation.ProductDTO" useGeneratedKeys="true" keyProperty="productId">
+        INSERT INTO projectdb.products (type, name, bank, rate, conditions_json, tags)
+        VALUES (#{type}, #{name}, #{bank}, #{rate}, #{conditionsJson}::jsonb, #{tags, typeHandler=com.smartbudget.config.StringArrayTypeHandler})
+    </insert>
+    
+    <!-- 사용자 카드 -->
+    <select id="selectUserCards" resultMap="CardResultMap">
+        SELECT 
+            c.card_id, 
+            c.name, 
+            c.company, 
+            c.benefits_json::text as benefits_json, 
+            c.benefits_detail_text,
+            c.monthly_requirement,
+            c.image_url, 
+            c.link, 
+            c.tags
+        FROM projectdb.user_cards uc
+        JOIN projectdb.cards c ON uc.card_id = c.card_id
+        WHERE uc.user_id = #{userId}
+        ORDER BY c.name
+    </select>
+    
+    <insert id="insertUserCard">
+        INSERT INTO projectdb.user_cards (user_id, card_id)
+        VALUES (#{userId}, #{cardId})
+    </insert>
+    
+    <delete id="deleteUserCard">
+        DELETE FROM projectdb.user_cards
+        WHERE user_id = #{userId} AND card_id = #{cardId}
+    </delete>
+    
+    <!-- 추천 내역 -->
+    <select id="selectRecommendationsByUser" resultMap="RecommendationResultMap">
+        SELECT r.rec_id, r.year_month, r.rec_type, r.item_id, r.score, 
+               r.reason_text, r.created_at, r.user_id,
+               CASE 
+                   WHEN r.rec_type = 'CARD' THEN c.name
+                   WHEN r.rec_type = 'PRODUCT' THEN p.name
+               END as item_name,
+               CASE 
+                   WHEN r.rec_type = 'CARD' THEN c.company
+                   WHEN r.rec_type = 'PRODUCT' THEN p.bank
+               END as item_details
+        FROM projectdb.recommendations r
+        LEFT JOIN projectdb.cards c ON r.rec_type = 'CARD' AND r.item_id = c.card_id
+        LEFT JOIN projectdb.products p ON r.rec_type = 'PRODUCT' AND r.item_id = p.product_id
+        WHERE r.user_id = #{userId}
+        ORDER BY r.created_at DESC
+    </select>
+    
+    <select id="selectRecommendationsByYearMonth" resultMap="RecommendationResultMap">
+        SELECT r.rec_id, r.year_month, r.rec_type, r.item_id, r.score, 
+               r.reason_text, r.created_at, r.user_id,
+               CASE 
+                   WHEN r.rec_type = 'CARD' THEN c.name
+                   WHEN r.rec_type = 'PRODUCT' THEN p.name
+               END as item_name,
+               CASE 
+                   WHEN r.rec_type = 'CARD' THEN c.company
+                   WHEN r.rec_type = 'PRODUCT' THEN p.bank
+               END as item_details
+        FROM projectdb.recommendations r
+        LEFT JOIN projectdb.cards c ON r.rec_type = 'CARD' AND r.item_id = c.card_id
+        LEFT JOIN projectdb.products p ON r.rec_type = 'PRODUCT' AND r.item_id = p.product_id
+        WHERE r.user_id = #{userId} AND r.year_month = #{yearMonth}
+        ORDER BY r.score DESC
+    </select>
+    
+    <insert id="insertRecommendation" parameterType="com.smartbudget.recommendation.RecommendationDTO" useGeneratedKeys="true" keyProperty="recId">
+        INSERT INTO projectdb.recommendations (year_month, rec_type, item_id, score, reason_text, user_id)
+        VALUES (#{yearMonth}, #{recType}, #{itemId}, #{score}, #{reasonText}, #{userId})
+    </insert>
+    
+    <delete id="deleteOldRecommendations">
+        DELETE FROM projectdb.recommendations
+        WHERE user_id = #{userId} AND year_month = #{yearMonth}
+    </delete>
+</mapper>

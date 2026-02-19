@@ -1,0 +1,39 @@
+{
+  "model_version": "text_tfidf_svc_calibrated_v1",
+  "n_samples": 4500,
+  "split": {
+    "train": 3543,
+    "val": 440,
+    "test": 517
+  },
+  "macro_f1": {
+    "val": 0.9919011899267502,
+    "test": 0.97418359679185
+  },
+  "classes": [
+    "건강",
+    "경조사",
+    "기타",
+    "꾸밈비",
+    "문화",
+    "보험",
+    "비상금",
+    "생활용품",
+    "수입",
+    "식비",
+    "여행",
+    "자기계발",
+    "자동차",
+    "저축(투자 포함)",
+    "주거",
+    "통신비"
+
+    
+  ],
+  "train_args": {
+    "random_state": 42,
+    "test_size": 0.1,
+    "val_size": 0.1,
+    "out_dir": "src\\ml\\artifacts"
+  }
+}

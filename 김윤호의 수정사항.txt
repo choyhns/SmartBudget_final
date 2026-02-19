@@ -1,0 +1,88 @@
+2026-02-06 (금) 21:10
+
+main.py 수정내역
+
+1.
+from app.ocr import OCRService
+from app.classifier import CategoryClassifier
+from app.embedding import EmbeddingService
+from app.llm import LLMService
+from app.rag import RAGService >> 이것들 전부 삭제 후 아래로 교체
+
+
+def _new_ocr_service():
+    from app.ocr import OCRService 
+    return OCRService()
+
+def _new_classifier():
+    from app.classifier import CategoryClassifier
+    return CategoryClassifier()
+
+def _new_embedding_service():
+    from app.embedding import EmbeddingService
+    return EmbeddingService()
+
+def _new_llm_service():
+    from app.llm import LLMService
+    return LLMService()
+
+def _new_rag_service():
+    from app.rag import RAGService
+    return RAGService()
+
+
+
+
+2.
+ocr_service = OCRService()
+classifier = CategoryClassifier()
+embedding_service = EmbeddingService()
+llm_service = LLMService()
+rag_service = RAGService() >> 이것들 전부 삭제 후 아래로 교체
+
+
+class LazyService:
+    def __init__(self, factory, name: str):
+        self._factory = factory
+        self._name = name
+        self._instance = None
+
+    @property
+    def initialized(self) -> bool:
+        return self._instance is not None
+
+    def _get(self):
+        if self._instance is None:
+            logger.info(f"{self._name} lazy initialization start")
+            self._instance = self._factory()
+            logger.info(f"{self._name} lazy initialization done")
+        return self._instance
+
+    def __getattr__(self, item):
+        return getattr(self._get(), item)
+
+ocr_service = LazyService(_new_ocr_service, "OCRService")
+classifier = LazyService(_new_classifier, "CategoryClassifier")
+embedding_service = LazyService(_new_embedding_service, "EmbeddingService")
+llm_service = LazyService(_new_llm_service, "LLMService")
+rag_service = LazyService(_new_rag_service, "RAGService")
+
+
+
+
+
+3.
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        # 실제 init 여부만 표시 (health 호출 때문에 초기화되지 않게)
+        "ocr_initialized": ocr_service.initialized,
+        "classifier_initialized": classifier.initialized,
+        "embedding_initialized": embedding_service.initialized,
+        "llm_initialized": llm_service.initialized,
+        "rag_initialized": rag_service.initialized,
+    }
+
+
+

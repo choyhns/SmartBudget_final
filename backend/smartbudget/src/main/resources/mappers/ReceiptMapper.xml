@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.receipt.ReceiptMapper">
+    
+    <resultMap id="ReceiptResultMap" type="com.smartbudget.receipt.ReceiptFileDTO">
+        <id property="fileId" column="file_id"/>
+        <result property="urlPath" column="url_path"/>
+        <result property="ocrRawJson" column="ocr_raw_json"/>
+        <result property="ocrParsedJson" column="ocr_parsed_json"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="txId" column="tx_id"/>
+        <result property="status" column="status"/>
+    </resultMap>
+
+    <select id="selectReceiptsByUser" resultMap="ReceiptResultMap">
+        SELECT file_id, url_path, ocr_raw_json::text as ocr_raw_json, 
+               ocr_parsed_json::text as ocr_parsed_json, created_at, 
+               user_id, tx_id, status
+        FROM projectdb.receipt_files
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+    
+    <select id="selectReceiptById" resultMap="ReceiptResultMap">
+        SELECT file_id, url_path, ocr_raw_json::text as ocr_raw_json, 
+               ocr_parsed_json::text as ocr_parsed_json, created_at, 
+               user_id, tx_id, status
+        FROM projectdb.receipt_files
+        WHERE file_id = #{fileId}
+    </select>
+    
+    <select id="selectReceiptsByStatus" resultMap="ReceiptResultMap">
+        SELECT file_id, url_path, ocr_raw_json::text as ocr_raw_json, 
+               ocr_parsed_json::text as ocr_parsed_json, created_at, 
+               user_id, tx_id, status
+        FROM projectdb.receipt_files
+        WHERE user_id = #{userId} AND status = #{status}
+        ORDER BY created_at DESC
+    </select>
+    
+    <insert id="insertReceipt" parameterType="com.smartbudget.receipt.ReceiptFileDTO" useGeneratedKeys="true" keyProperty="fileId">
+        INSERT INTO projectdb.receipt_files (url_path, user_id, status)
+        VALUES (#{urlPath}, #{userId}, 'UPLOADED')
+    </insert>
+    
+    <update id="updateReceipt" parameterType="com.smartbudget.receipt.ReceiptFileDTO">
+        UPDATE projectdb.receipt_files
+        SET ocr_raw_json = #{ocrRawJson}::jsonb,
+            ocr_parsed_json = #{ocrParsedJson}::jsonb,
+            status = #{status}
+        WHERE file_id = #{fileId}
+    </update>
+    
+    <update id="updateReceiptStatus">
+        UPDATE projectdb.receipt_files
+        SET status = #{status}
+        WHERE file_id = #{fileId}
+    </update>
+    
+    <update id="linkReceiptToTransaction">
+        UPDATE projectdb.receipt_files
+        SET tx_id = #{txId}, status = 'CONFIRMED'
+        WHERE file_id = #{fileId}
+    </update>
+    
+    <delete id="deleteReceipt">
+        DELETE FROM projectdb.receipt_files
+        WHERE file_id = #{fileId}
+    </delete>
+</mapper>

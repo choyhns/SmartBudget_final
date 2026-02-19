@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: ./backend/smartbudget
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/smartbudget/.env
+    restart: unless-stopped
+    networks:
+      - appnet
+    expose:
+      - "8080"
+
+  ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    env_file:
+      - ./ml-server/.env
+    restart: unless-stopped
+    networks:
+      - appnet
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - backend
+      - ml
+    restart: unless-stopped
+    networks:
+      - appnet
+    ports:
+      - "80:80"
+
+networks:
+  appnet:
+    driver: bridge

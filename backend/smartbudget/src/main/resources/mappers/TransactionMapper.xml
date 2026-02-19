@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.smartbudget.transaction.TransactionMapper">
+    
+    <resultMap id="TransactionResultMap" type="com.smartbudget.transaction.TransactionDTO">
+        <id property="txId" column="tx_id"/>
+        <result property="txDatetime" column="tx_datetime"/>
+        <result property="amount" column="amount"/>
+        <result property="merchant" column="merchant"/>
+        <result property="memo" column="memo"/>
+        <result property="source" column="source"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="userId" column="user_id"/>
+        <result property="methodId" column="method_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="methodName" column="method_name"/>
+    </resultMap>
+
+    <select id="selectAllTransactionsByUser" resultMap="TransactionResultMap">
+        SELECT 
+            t.tx_id,
+            t.tx_datetime,
+            t.amount,
+            t.merchant,
+            t.memo,
+            t.source,
+            t.created_at,
+            t.user_id,
+            t.method_id,
+            t.category_id,
+            c.name as category_name,
+            pm.name as method_name
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        LEFT JOIN projectdb.payment_methods pm ON t.method_id = pm.method_id
+        WHERE t.user_id = #{userId}
+        ORDER BY t.tx_datetime DESC
+    </select>
+
+    <select id="selectTransactionById" resultMap="TransactionResultMap">
+        SELECT 
+            t.tx_id,
+            t.tx_datetime,
+            t.amount,
+            t.merchant,
+            t.memo,
+            t.source,
+            t.created_at,
+            t.user_id,
+            t.method_id,
+            t.category_id,
+            c.name as category_name,
+            pm.name as method_name
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        LEFT JOIN projectdb.payment_methods pm ON t.method_id = pm.method_id
+        WHERE t.tx_id = #{txId}
+    </select>
+
+    <select id="selectTransactionsByYearMonth" resultMap="TransactionResultMap">
+        SELECT 
+            t.tx_id,
+            t.tx_datetime,
+            t.amount,
+            t.merchant,
+            t.memo,
+            t.source,
+            t.created_at,
+            t.user_id,
+            t.method_id,
+            t.category_id,
+            c.name as category_name,
+            pm.name as method_name
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        LEFT JOIN projectdb.payment_methods pm ON t.method_id = pm.method_id
+        WHERE t.user_id = #{userId}
+          AND TO_CHAR(t.tx_datetime, 'YYYYMM') = #{yearMonth}
+        ORDER BY t.tx_datetime DESC
+    </select>
+
+    <select id="selectTransactionsByDateRange" resultMap="TransactionResultMap">
+        SELECT
+            t.tx_id,
+            t.tx_datetime,
+            t.amount,
+            t.merchant,
+            t.memo,
+            t.source,
+            t.created_at,
+            t.user_id,
+            t.method_id,
+            t.category_id,
+            c.name as category_name,
+            pm.name as method_name
+        FROM projectdb.transactions t
+        LEFT JOIN projectdb.categories c ON t.category_id = c.category_id
+        LEFT JOIN projectdb.payment_methods pm ON t.method_id = pm.method_id
+        WHERE t.user_id = #{userId}
+          AND (t.tx_datetime::date &gt;= #{startDate} AND t.tx_datetime::date &lt;= #{endDate})
+        ORDER BY t.tx_datetime ASC
+    </select>
+
+    <insert id="insertTransaction" parameterType="com.smartbudget.transaction.TransactionDTO" useGeneratedKeys="true" keyProperty="txId">
+        INSERT INTO projectdb.transactions (
+            tx_datetime, 
+            amount, 
+            merchant, 
+            memo, 
+            source, 
+            user_id, 
+            method_id, 
+            category_id
+        )
+        VALUES (
+            #{txDatetime}, 
+            #{amount}, 
+            #{merchant}, 
+            #{memo}, 
+            #{source}, 
+            #{userId}, 
+            #{methodId}, 
+            #{categoryId}
+        )
+    </insert>
+
+    <update id="updateTransaction" parameterType="com.smartbudget.transaction.TransactionDTO">
+        UPDATE projectdb.transactions
+        SET tx_datetime = #{txDatetime},
+            amount = #{amount},
+            merchant = #{merchant},
+            memo = #{memo},
+            source = #{source},
+            method_id = #{methodId},
+            category_id = #{categoryId}
+        WHERE tx_id = #{txId}
+    </update>
+
+    <delete id="deleteTransaction">
+        DELETE FROM projectdb.transactions
+        WHERE tx_id = #{txId}
+    </delete>
+</mapper>

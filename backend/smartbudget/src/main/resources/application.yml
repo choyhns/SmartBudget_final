@@ -1,0 +1,18 @@
+# RAG 관련 설정 (AI 호출은 Spring → Python만, Python에서 Gemini API 사용)
+app:
+  rag:
+    embed:
+      model: ${RAG_EMBEDDING_MODEL:text-embedding-004}
+      dimension: ${RAG_EMBED_DIMENSION:768}
+    top-k: ${RAG_TOP_K:5}
+    # true: embedding을 JSONB로 저장·검색 (pgvector 없음, Railway 등). false: pgvector 사용
+    use-jsonb: ${RAG_USE_JSONB:true}
+    # true: 벡터 저장소로 Chroma 사용 (ml-server). PostgreSQL에는 content만 저장
+    use-chroma: ${RAG_USE_CHROMA:true}
+    pgvector:
+      enabled: ${RAG_PGVECTOR_ENABLED:true}
+    scheduler:
+      enabled: ${RAG_SCHEDULER_ENABLED:false}
+      # 매일 새벽 3시 Asia/Seoul (또는 월마감 시점)
+      cron: ${RAG_SCHEDULER_CRON:0 0 3 * * ?}
+      zone: ${RAG_SCHEDULER_ZONE:Asia/Seoul}
