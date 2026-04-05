@@ -145,12 +145,6 @@ uvicorn app.main:app --reload
 
 ---
 
-## 📌 프로젝트 상태
-
-🚧 진행 중 (In Progress)
-
----
-
 ## 🙋‍♂️ 한 줄 요약
 
 > 데이터를 구조적으로 가공하고 AI와 연결하여
